@@ -1,0 +1,6 @@
+# Example URLs for testing
+# One URL per line. Lines starting with # are ignored.
+
+https://example.com
+https://github.com
+https://google.com
