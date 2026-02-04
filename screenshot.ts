@@ -113,13 +113,22 @@ Examples:
         console.error('❌ Error: --output requires a directory path');
         process.exit(1);
       }
-      outputDir = args[++i];
+      const nextArg = args[++i];
+      if (!nextArg) {
+        console.error('❌ Error: --output requires a directory path');
+        process.exit(1);
+      }
+      outputDir = nextArg;
     } else if (arg === '--file' || arg === '-f') {
       if (i + 1 >= args.length) {
         console.error('❌ Error: --file requires a filename');
         process.exit(1);
       }
       const filename = args[++i];
+      if (!filename) {
+        console.error('❌ Error: --file requires a filename');
+        process.exit(1);
+      }
       const fs = await import('fs/promises');
       const content = await fs.readFile(filename, 'utf-8');
       const fileUrls = content
@@ -131,7 +140,7 @@ Examples:
       // Collect remaining args as URLs
       urls.push(...args.slice(i + 1));
       break;
-    } else if (arg.startsWith('http://') || arg.startsWith('https://')) {
+    } else if (arg && (arg.startsWith('http://') || arg.startsWith('https://'))) {
       urls.push(arg);
     }
   }
