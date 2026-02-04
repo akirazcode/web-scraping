@@ -9,6 +9,9 @@ dist
 # screenshots
 screenshots
 
+# urls of screenshots
+urls.txt
+
 # code coverage
 coverage
 *.lcov
