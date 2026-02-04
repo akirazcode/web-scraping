@@ -109,8 +109,16 @@ Examples:
     const arg = args[i];
 
     if (arg === '--output' || arg === '-o') {
+      if (i + 1 >= args.length) {
+        console.error('❌ Error: --output requires a directory path');
+        process.exit(1);
+      }
       outputDir = args[++i];
     } else if (arg === '--file' || arg === '-f') {
+      if (i + 1 >= args.length) {
+        console.error('❌ Error: --file requires a filename');
+        process.exit(1);
+      }
       const filename = args[++i];
       const fs = await import('fs/promises');
       const content = await fs.readFile(filename, 'utf-8');
