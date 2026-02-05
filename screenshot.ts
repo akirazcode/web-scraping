@@ -1,7 +1,12 @@
 #!/usr/bin/env bun
 import puppeteer, { Page } from 'puppeteer';
-import { existsSync, mkdirSync } from 'fs';
+import { existsSync, mkdirSync, unlinkSync } from 'fs';
 import { join } from 'path';
+import ffmpeg from 'fluent-ffmpeg';
+import ffmpegPath from '@ffmpeg-installer/ffmpeg';
+
+// Set ffmpeg path
+ffmpeg.setFfmpegPath(ffmpegPath.path);
 
 // Mobile viewport configuration (iPhone 12 Pro)
 const MOBILE_VIEWPORT = {
@@ -14,10 +19,10 @@ const MOBILE_VIEWPORT = {
 
 // Video recording duration (15 seconds)
 const VIDEO_DURATION_MS = 15000;
-// Scroll interval
-const SCROLL_INTERVAL_MS = 100;
+// Scroll interval (reduced for more activity)
+const SCROLL_INTERVAL_MS = 12;
 // Scroll amount per interval (pixels)
-const SCROLL_AMOUNT = 50;
+const SCROLL_AMOUNT = 1;
 
 interface ScreenshotOptions {
   urls: string[];
@@ -42,20 +47,25 @@ async function scrollPage(page: Page, durationMs: number): Promise<void> {
         window.scrollBy(0, scrollAmount);
       }, SCROLL_AMOUNT);
     }
+    
+    // Always wait for the interval to maintain consistent timing and video duration
     await new Promise(resolve => setTimeout(resolve, SCROLL_INTERVAL_MS));
   }
 }
 
 async function recordVideo(page: Page, filepath: string): Promise<void> {
-  // Validate the filepath ends with .webm
-  if (!filepath.endsWith('.webm')) {
-    throw new Error('Video filepath must end with .webm');
+  // Validate the filepath ends with .mp4
+  if (!filepath.endsWith('.mp4')) {
+    throw new Error('Video filepath must end with .mp4');
   }
   
   console.log(`🎬 Starting video recording (${VIDEO_DURATION_MS / 1000}s scroll)...`);
   
-  // Start screen recording
-  const recorder = await page.screencast({ path: filepath as `${string}.webm` });
+  // Record as webm first (Puppeteer's native format)
+  const tempWebmPath = filepath.replace('.mp4', '.webm');
+  const recorder = await page.screencast({ 
+    path: tempWebmPath as `${string}.webm`
+  });
   
   // Scroll down for the duration
   await scrollPage(page, VIDEO_DURATION_MS);
@@ -63,7 +73,34 @@ async function recordVideo(page: Page, filepath: string): Promise<void> {
   // Stop recording
   await recorder.stop();
   
-  console.log(`✅ Video saved: ${filepath}`);
+  console.log(`🔄 Converting webm to mp4...`);
+  
+  // Convert webm to mp4 using fluent-ffmpeg
+  return new Promise((resolve, reject) => {
+    ffmpeg(tempWebmPath)
+      .outputOptions([
+        '-c:v libx264',
+        '-preset fast',
+        '-crf 22'
+      ])
+      .output(filepath)
+      .on('end', () => {
+        // Success - remove temporary webm file
+        try {
+          unlinkSync(tempWebmPath);
+        } catch (e) {
+          // Ignore cleanup errors
+        }
+        console.log(`✅ Video saved: ${filepath}`);
+        resolve();
+      })
+      .on('error', (err) => {
+        console.error(`❌ Failed to convert video:`, err.message);
+        console.error(`Keeping webm file: ${tempWebmPath}`);
+        reject(err);
+      })
+      .run();
+  });
 }
 
 async function takeScreenshots({ urls, outputDir, recordVideo: shouldRecordVideo }: ScreenshotOptions) {
@@ -121,7 +158,7 @@ async function takeScreenshots({ urls, outputDir, recordVideo: shouldRecordVideo
           await page.evaluate(() => window.scrollTo(0, 0));
           await new Promise(resolve => setTimeout(resolve, 500)); // Wait for scroll to complete
           
-          const videoFilename = `${urlObj.hostname.replace(/\./g, '_')}_${timestamp}.webm`;
+          const videoFilename = `${urlObj.hostname.replace(/\./g, '_')}_${timestamp}.mp4`;
           const videoFilepath = join(outputDir, videoFilename);
           await recordVideo(page, videoFilepath);
         }
