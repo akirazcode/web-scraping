@@ -29,17 +29,32 @@ async function scrollPage(page: Page, durationMs: number): Promise<void> {
   const startTime = Date.now();
   
   while (Date.now() - startTime < durationMs) {
-    await page.evaluate((scrollAmount: number) => {
-      window.scrollBy(0, scrollAmount);
-    }, SCROLL_AMOUNT);
+    // Check if we can still scroll
+    const canScroll = await page.evaluate(() => {
+      const scrollTop = window.scrollY || document.documentElement.scrollTop;
+      const scrollHeight = document.documentElement.scrollHeight;
+      const clientHeight = document.documentElement.clientHeight;
+      return scrollTop + clientHeight < scrollHeight;
+    });
+    
+    if (canScroll) {
+      await page.evaluate((scrollAmount: number) => {
+        window.scrollBy(0, scrollAmount);
+      }, SCROLL_AMOUNT);
+    }
     await new Promise(resolve => setTimeout(resolve, SCROLL_INTERVAL_MS));
   }
 }
 
 async function recordVideo(page: Page, filepath: string): Promise<void> {
+  // Validate the filepath ends with .webm
+  if (!filepath.endsWith('.webm')) {
+    throw new Error('Video filepath must end with .webm');
+  }
+  
   console.log(`🎬 Starting video recording (${VIDEO_DURATION_MS / 1000}s scroll)...`);
   
-  // Start screen recording - cast path to the expected template literal type
+  // Start screen recording
   const recorder = await page.screencast({ path: filepath as `${string}.webm` });
   
   // Scroll down for the duration
