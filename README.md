@@ -6,6 +6,7 @@ CLI script in TypeScript to take mobile screenshots of websites using Puppeteer 
 
 - 📱 Mobile viewport screenshots (iPhone 12 Pro simulation)
 - 🎯 Viewport-only capture (initial screen, not full page)
+- 🎬 Video recording with 15s scroll down animation
 - 🚀 Runs with Bun runtime
 - 📝 Multiple input methods (command line, file)
 - 🎨 Customizable output directory
@@ -35,6 +36,15 @@ bun install
 Take screenshot of a single website:
 ```bash
 bun run screenshot.ts https://example.com
+```
+
+### Video Recording
+
+Record a 15-second video with scroll down animation:
+```bash
+bun run screenshot.ts --video https://example.com
+# or
+bun run screenshot.ts -v https://example.com
 ```
 
 ### Multiple URLs
@@ -79,6 +89,7 @@ npm run screenshot -- https://example.com
 |--------|-------|-------------|---------|
 | `--output` | `-o` | Output directory | `./screenshots` |
 | `--file` | `-f` | Read URLs from file | - |
+| `--video` | `-v` | Record 15s video with scroll down | - |
 | `--help` | `-h` | Show help message | - |
 
 ## Mobile Viewport Configuration
@@ -99,6 +110,13 @@ Screenshots are saved as PNG files with the following naming format:
 
 Example: `example_com_1706999999999.png`
 
+When video recording is enabled, videos are saved as WebM files:
+```
+<hostname>_<timestamp>.webm
+```
+
+Example: `example_com_1706999999999.webm`
+
 ## Examples
 
 ```bash
@@ -113,6 +131,15 @@ bun run screenshot.ts -f urls.txt -o ./output
 
 # Using the example file
 bun run screenshot.ts -f urls-example.txt
+
+# With video recording
+bun run screenshot.ts -v https://example.com
+
+# Video recording with multiple URLs
+bun run screenshot.ts -v https://example.com https://github.com
+
+# Video with custom output
+bun run screenshot.ts -v -o ./output https://example.com
 ```
 
 ## Error Handling
