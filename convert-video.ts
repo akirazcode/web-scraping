@@ -12,14 +12,14 @@ interface ConvertOptions {
   inputFiles: string[];
   outputDir?: string;
   keepOriginal?: boolean;
-  quality?: number; // CRF value (0-51, lower is better quality)
+  quality?: number; // CRF value (15-35, lower is better quality)
 }
 
-async function convertToMp4({
+async function convertToWebM({
   inputFiles,
   outputDir,
-  keepOriginal = false,
-  quality = 22,
+  keepOriginal = true,
+  quality = 30,
 }: ConvertOptions): Promise<void> {
   for (const inputPath of inputFiles) {
     if (!existsSync(inputPath)) {
@@ -28,7 +28,7 @@ async function convertToMp4({
     }
 
     const ext = extname(inputPath);
-    if (!['.webm', '.avi', '.mov', '.mkv', '.flv'].includes(ext.toLowerCase())) {
+    if (!['.mp4', '.avi', '.mov', '.mkv', '.flv', '.webm'].includes(ext.toLowerCase())) {
       console.log(`⏭️  Skipping non-video file: ${inputPath}`);
       continue;
     }
@@ -38,18 +38,32 @@ async function convertToMp4({
 
       // Determine output path
       const baseNameWithoutExt = basename(inputPath, ext);
-      const outputFilename = `${baseNameWithoutExt}.mp4`;
-      const outputPath = outputDir
-        ? join(outputDir, outputFilename)
-        : inputPath.replace(ext, '.mp4');
+      let outputFilename: string;
+      let outputPath: string;
+      
+      if (ext.toLowerCase() === '.webm' && !outputDir) {
+        // If input is already webm and no output dir specified, add -optimized suffix
+        outputFilename = `${baseNameWithoutExt}-optimized.webm`;
+        outputPath = inputPath.replace(basename(inputPath), outputFilename);
+      } else {
+        outputFilename = `${baseNameWithoutExt}.webm`;
+        outputPath = outputDir
+          ? join(outputDir, outputFilename)
+          : inputPath.replace(ext, '.webm');
+      }
 
       // Convert video
       await new Promise<void>((resolve, reject) => {
         ffmpeg(inputPath)
           .outputOptions([
-            '-c:v libx264',
-            '-preset fast',
-            `-crf ${quality}`,
+            '-c:v libvpx-vp9', // VP9 codec for WebM
+            '-crf ' + quality, // Quality (15-35, lower is better)
+            '-b:v 0', // Variable bitrate
+            '-row-mt 1', // Row-based multithreading
+            '-c:a libopus', // Opus audio codec
+            '-b:a 128k', // Audio bitrate
+            '-deadline good', // Encoding speed/quality tradeoff
+            '-cpu-used 2', // Speed preset (0-5, higher is faster)
           ])
           .output(outputPath)
           .on('progress', (progress) => {
@@ -92,37 +106,38 @@ async function main() {
 
   if (args.length === 0 || args.includes('--help') || args.includes('-h')) {
     console.log(`
-🎬 Video Converter CLI
+🎬 Video to WebM Converter CLI
 
-Converts video files (webm, avi, mov, mkv, flv) to MP4 format.
+Converts and optimizes video files (mp4, avi, mov, mkv, flv, webm) to WebM format.
 
 Usage:
   bun run convert-video.ts <file1> [file2] [file3] ...
-  bun run convert-video.ts --pattern "*.webm"
+  bun run convert-video.ts --pattern "*.mp4"
   bun run convert-video.ts --dir <directory>
 
 Options:
   --output, -o <dir>       Output directory (default: same as input)
-  --pattern, -p <pattern>  Glob pattern to match files (e.g., "*.webm")
+  --pattern, -p <pattern>  Glob pattern to match files (e.g., "*.mp4")
   --dir, -d <directory>    Convert all videos in directory
-  --keep, -k               Keep original files after conversion
-  --quality, -q <value>    Quality (CRF: 0-51, default: 22, lower is better)
+  --keep, -k               Keep original files (default: yes)
+  --remove, -r             Remove original files after conversion
+  --quality, -q <value>    Quality (CRF: 15-35, default: 30, lower is better)
   --help, -h               Show this help message
 
 Examples:
-  bun run convert-video.ts video.webm
-  bun run convert-video.ts video1.webm video2.webm
-  bun run convert-video.ts -p "screenshots/*.webm"
-  bun run convert-video.ts -d ./screenshots --keep
-  bun run convert-video.ts video.webm -q 18 -o ./converted
+  bun run convert-video.ts video.mp4
+  bun run convert-video.ts video1.mp4 video2.avi
+  bun run convert-video.ts -p "screenshots/*.mp4"
+  bun run convert-video.ts -d ./screenshots
+  bun run convert-video.ts video.mp4 -q 25 -o ./converted --remove
 `);
     process.exit(0);
   }
 
   let inputFiles: string[] = [];
   let outputDir: string | undefined;
-  let keepOriginal = false;
-  let quality = 22;
+  let keepOriginal = true;
+  let quality = 30;
 
   // Parse arguments
   for (let i = 0; i < args.length; i++) {
@@ -158,25 +173,27 @@ Examples:
         console.error('❌ Error: --dir requires a directory path');
         process.exit(1);
       }
-      const glob = new Glob('**/*.{webm,avi,mov,mkv,flv}');
+      const glob = new Glob('**/*.{mp4,avi,mov,mkv,flv,webm}');
       for await (const file of glob.scan(dir)) {
         inputFiles.push(join(dir, file));
       }
     } else if (arg === '--keep' || arg === '-k') {
       keepOriginal = true;
+    } else if (arg === '--remove' || arg === '-r') {
+      keepOriginal = false;
     } else if (arg === '--quality' || arg === '-q') {
       if (i + 1 >= args.length) {
-        console.error('❌ Error: --quality requires a numeric value (0-51)');
+        console.error('❌ Error: --quality requires a numeric value (15-35)');
         process.exit(1);
       }
       const qualityStr = args[++i];
       if (!qualityStr) {
-        console.error('❌ Error: --quality requires a numeric value (0-51)');
+        console.error('❌ Error: --quality requires a numeric value (15-35)');
         process.exit(1);
       }
       quality = parseInt(qualityStr, 10);
-      if (isNaN(quality) || quality < 0 || quality > 51) {
-        console.error('❌ Error: quality must be a number between 0 and 51');
+      if (isNaN(quality) || quality < 15 || quality > 35) {
+        console.error('❌ Error: quality must be a number between 15 and 35 for WebM');
         process.exit(1);
       }
     } else if (arg && !arg.startsWith('-')) {
@@ -198,7 +215,7 @@ Examples:
   console.log(`🗑️  Keep originals: ${keepOriginal ? 'yes' : 'no'}`);
   console.log('');
 
-  await convertToMp4({ inputFiles, outputDir, keepOriginal, quality });
+  await convertToWebM({ inputFiles, outputDir, keepOriginal, quality });
 
   console.log('\n✨ All conversions completed!');
 }

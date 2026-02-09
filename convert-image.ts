@@ -16,7 +16,7 @@ interface ConvertOptions {
 async function convertToWebP({
   inputFiles,
   outputDir,
-  keepOriginal = false,
+  keepOriginal = true,
   quality = 80,
   maxWidth,
   maxHeight,
@@ -38,10 +38,19 @@ async function convertToWebP({
 
       // Determine output path
       const baseNameWithoutExt = basename(inputPath, ext);
-      const outputFilename = `${baseNameWithoutExt}.webp`;
-      const outputPath = outputDir
-        ? join(outputDir, outputFilename)
-        : inputPath.replace(ext, '.webp');
+      let outputFilename: string;
+      let outputPath: string;
+      
+      if (ext.toLowerCase() === '.webp' && !outputDir) {
+        // If input is already webp and no output dir specified, add -optimized suffix
+        outputFilename = `${baseNameWithoutExt}-optimized.webp`;
+        outputPath = inputPath.replace(basename(inputPath), outputFilename);
+      } else {
+        outputFilename = `${baseNameWithoutExt}.webp`;
+        outputPath = outputDir
+          ? join(outputDir, outputFilename)
+          : inputPath.replace(ext, '.webp');
+      }
 
       // Load image
       let image = sharp(inputPath);
@@ -111,7 +120,8 @@ Options:
   --output, -o <dir>       Output directory (default: same as input)
   --pattern, -p <pattern>  Glob pattern to match files (e.g., "*.png")
   --dir, -d <directory>    Convert all images in directory
-  --keep, -k               Keep original files after conversion
+  --keep, -k               Keep original files (default: yes)
+  --remove, -r             Remove original files after conversion
   --quality, -q <value>    Quality (0-100, default: 80)
   --width, -w <pixels>     Max width (maintains aspect ratio)
   --height, -h <pixels>    Max height (maintains aspect ratio)
@@ -121,8 +131,8 @@ Examples:
   bun run convert-image.ts image.png
   bun run convert-image.ts image1.jpg image2.png
   bun run convert-image.ts -p "screenshots/*.png"
-  bun run convert-image.ts -d ./screenshots --keep
-  bun run convert-image.ts image.jpg -q 90 -w 1920
+  bun run convert-image.ts -d ./screenshots
+  bun run convert-image.ts image.jpg -q 90 -w 1920 --remove
   bun run convert-image.ts -p "*.png" -w 1200 -o ./optimized
 `);
     process.exit(0);
@@ -130,7 +140,7 @@ Examples:
 
   let inputFiles: string[] = [];
   let outputDir: string | undefined;
-  let keepOriginal = false;
+  let keepOriginal = true;
   let quality = 80;
   let maxWidth: number | undefined;
   let maxHeight: number | undefined;
@@ -175,6 +185,8 @@ Examples:
       }
     } else if (arg === '--keep' || arg === '-k') {
       keepOriginal = true;
+    } else if (arg === '--remove' || arg === '-r') {
+      keepOriginal = false;
     } else if (arg === '--quality' || arg === '-q') {
       if (i + 1 >= args.length) {
         console.error('❌ Error: --quality requires a numeric value (0-100)');
